@@ -1,0 +1,186 @@
+---
+title: 'VAR Model Analysis on Personal Savings Rate and Industry Production of Manufacturing'
+author: "William Stevenson"
+date: "04-22-2022"
+output:
+  html_document:
+    code_folding: hide
+    df_print: paged
+    fig_caption: yes
+    theme: sandstone
+    toc: yes
+    toc_depth: 4
+    toc_float: no
+  pdf_document:
+    toc: yes
+---
+$~$
+
+## Abstract
+\
+ This analysis will take a look at Personal Savings rate in the United States as well as Industry Production of Manufacturing to see how much each variable helps in predicting the other. The impulse response functions produced in this analysis found that shocks to Manufacturing Production percentage change did induce a response in Personal Savings Rate percentage change and that shocks to Personal Savings Rate percentage change had an impact on the percentage change of Manufacturing Production. The conclusion drawn from this is that when Manufacturing Production spikes, people adjust their savings rate quickly. On the other side of the coin, the percentage change of Manufacturing Production is also affected by the savings habits of the general population. However, the later is a weaker relationship than the former.
+
+### Introduction
+\
+Vector-Auto-Regression (VAR) models are some of the most prevalent models in the worlds of Economics and Finance. This is due to the fact that they analyze the dynamic relationship between variables in a time-series. By integrating past values of variables into a model, it is possible to tease out which variables lead other variables. Unfortunately, these models cannot tell the reader WHY one variable is helpful in predicting the other(s), simply that they are. For causality, robust economic theory must be applied.\
+\
+In this analysis, a VAR model will be employed to test the theory that the performance of the Manufacturing industry has a causal effect on the rate of change in the rate at which citizens save their earnings. This paper will go on to describe the data collected and necessary manipulations of said data. Afterwards, a brief explanation of VAR models and why they are so beloved by Economist and Forecasters. Lastly, the results of the analysis will be presented and interpreted along with a conclusion.\
+\
+
+
+### Theory, Data Collection and Manipulation
+\
+Personal Savings Rate is calculated as the ratio of personal savings to disposable personal income. This can be used as a general glimpse into how citizens feel about the economy they are in or their expectations about the future. Generally, during times of looming recessions or growing uncertainty, savings increases. This can be observed during the Dot.Com bust in the early 2000's, the Great Recession of 2007, and clearly visible at the end of 2019 leading into the COVID pandemic in 2020. On the other hand, savings rates generally go down when there are lower interest rates signally strong confidence in the markets and an economy ripe for consumption. It would make sense then that other key indicators for the overall health of an economy would also affect the rate at which people save their income.\
+\
+The interesting thing about something like Manufacturing however is that it provides a bit of cross-roads. If these production companies are doing well off and increasing production, do consumers consume more or save more to invest in these companies? The results of our analysis should give us insight into this predicament. First, we need some data.\
+\
+The data that was used in this paper was gathered from the Federal Reserve Economic Data (F.R.E.D) database spanning from February of 1972 to February 2020. Industrial Production of Manufacturing (IPMAN) is reported by the Board of Governors of the Federal Reserve System on a monthly basis in an index with the year 2017 = 100. The data is also already seasonally adjusted. In order to utilize VAR models, our data must be stationary. That is to say, the mean, variance and autocorrelation structure of the observations does not change over time. With variables that tend to simply grow over time (GDP, Output, etc.) with no real overall stable mean, it is necessary to mutate the data so that it is stationary. In most cases, this can be accomplished by looking at percentage change from observation to observation. For this reason, the data from FRED was downloaded with the units changed to percentage change.\
+Personal Savings Rate was also gathered from FRED but is sourced from the U.S Bureau of Economic Analysis. This data is reported monthly and already seasonally adjusted. The base data in FRED is in level percent form, so once again it is transformed so that both of our variables are in the same units (percentage change). The intuition behind measuring in percentage change is that it provides insight into how the growth rates of these variables change over time. How do these growth rates speed up or slow down when compared to one another? \
+\
+
+```{r setup, include = FALSE}
+rm(list=ls())
+graphics.off()
+knitr::opts_chunk$set(
+	echo = TRUE,
+	message = FALSE,
+	warning = FALSE
+)
+```
+
+```{r loadPackages, message=FALSE, warning=FALSE, include = FALSE}
+require(fpp3)
+require(tidyverse)
+require(dplyr)
+require(tidyquant)
+require(stargazer)
+require(kableExtra)
+require(vars)
+require(urca)
+require(tsDyn)
+require(apt) 
+require(timetk)
+require(lmtest)
+```
+```{r Reading in Data, include = FALSE}
+set.seed(600)
+setwd("C:/Users/ws15e/OneDrive - Florida State Students/Desktop/VARProject")
+D <- read.csv("VARProj.csv", stringsAsFactors = FALSE,header = TRUE)
+
+
+D<- D[158:758,]
+
+D <- D %>% 
+  mutate(Date = as_date(ï..DATE),
+         IPMAN = as.numeric(IPMAN_PCH),
+         PSR = as.numeric(PSAVERT_PCH))
+
+badvec <- c("ï..DATE","IPMAN_PCH","PSAVERT_PCH")
+
+D = D[,!(names(D) %in% badvec)]
+
+```
+### Unit Root Tests
+\
+The first thing that needs to be done is to look at our data to determine if we should be using either a VAR model or VECM (Vector-Error-Correction). One major distinction between the models is that VAR models will only work on stationary data. The Dickey-Fuller unit root tests were employed below and returned very significant p-values. As the null hypothesis for the Dickey-Fuller Unit root test is that their is no stationarity, we reject that null hypothesis and confirm that these variables are stationary. We can continue with our VAR model. 
+```{r Unit Root Test}
+ur.IPMAN <- ur.df(D$IPMAN, type = "drift", selectlags = "BIC")
+URIP <- summary(ur.IPMAN)
+
+URIP@testreg$coefficients[2,] %>% 
+    kable(format = "html", table.attr = "style='width:30%;' ", caption = "Manufacturing Production UR Test") %>% 
+  kableExtra::kable_styling()
+
+ur.PSR <- ur.df(D$PSR, type = "drift", selectlags = "BIC")
+
+URPSR <- summary(ur.PSR)
+
+URPSR@testreg$coefficients[2,] %>% 
+    kable(format = "html", table.attr = "style='width:30%;' ", caption = "Personal Savings UR Test")%>% 
+  kableExtra::kable_styling()
+```
+```{r Making Time Series & Selecting Lags, include = FALSE}
+Dts <- as.ts(D)
+
+Dts <- Dts[,c(3,2)]
+
+sel <- VARselect(Dts,lag.max=12,type="const")
+
+p <- sel$selection[2]
+
+```
+
+### Estimating Model
+\
+Below are the outputs of the estimation of our VAR model. The reported F-Statistics reveal that indeed both Personal Savings Rate as well as Manufacturing Production are useful in predicting each other. These findings are congruent with our hypothesis that spikes in Manufacturing production do have in influence in the rate at which people save their income. It is also true that the rate at which citizens save their income is also useful in predicting changes in Manufacturing production. It is important to notice that the higher F-Stat for the second table provides evidence for the fact that IPMAN has a greater influence over Personal Savings rate than Personal Savings rate has over IPMAN. Next, the impulse response graphs as well as the forecast error variance decomposition are posted below to help visualize this relationship.\
+\
+\
+\
+\
+\
+\
+```{r Estimating VAR model, message=FALSE, include=FALSE}
+var.D <- VAR(Dts,p=p,type="const")
+SUMVAR <- summary(var.D)
+```
+```{r Doing Granger Tests}
+
+PSRIPMAN <- grangertest(IPMAN ~ PSR,order=p,data=Dts)
+
+
+
+IPMANPSR <- grangertest(PSR ~ IPMAN,order=p,data=Dts)
+
+PSRIPMAN
+```
+
+```{r Second Granger Test}
+IPMANPSR
+```
+
+### Impulse Response Graphs
+
+\
+Below are the two charts that follow the responses of both variables when a 'ping' of one standard deviation is applied to the original state. The first figure shows a one standard deviation shock to Personal Savings rate and the response from IPMAN below that. The second figure shows a one standard deviation shock to IPMAN and the response from Personal Savings rate above that. The first figure confirms that shocks to Personal Savings rate do have a marginal (but statistically significant) effect on the percentage change in Manufacturing production. One month after the shock to Personal Savings, the 95% confidence interval (the red-dashed lines on either side of the trend) does fall below the original state for a brief time. The second figure confirms our findings that a one standard deviation positive shock to IPMAN does have a much larger effect on the Personal Savings rate.\
+\
+```{r Impulse Response Graphs}
+plot(irf(var.D, n.ahead = 6, boot = TRUE ))
+```
+
+
+### FEVD Output
+\
+The output from our Forecast-Error-Variance-Decomposition shows the amount of variance explained by each of the the variables for a forecast period of 1 year. The top figure explains that virtually all of the variance in the forecasts for Personal Savings rate is explained by its own variance while only a small portion is explained by the variance in IPMAN. The next figure shows practically the same situation for IPMAN. Most of IPMAN's variance of the 1 year forecast is explained by its own variance with only a small proportion coming from the variance of Personal Savings rate. The constant ratio implies that the amount of variance explained by the other variable does not change very much if at all over time.\
+```{r FEVD Output}
+plot(fevd(var.D, n.ahead = 12))
+```
+
+### Inversing the Shock to IPMAN
+\
+A curiosity came up when doing our analysis about how Personal Savings rate would respond to negative shocks to IPMAN and whether or not those dynamics look any different from positive shocks. The intuition behind this is that individuals perhaps are more likely to increase consumption (lower savings rate) faster than they are willing to reduce consumption. In order to explore this theory, we had to reverse the direction of the of the shock to IPMAN. The figure below shows that the response from Personal Savings rate is practically the same just in the inverse direction. As it turns out, individuals respond very similarly to positive and negative shocks to Manufacturing production just in inverse ways.\
+\
+```{r Trying things with Beaumont}
+var.2c=VAR(Dts,p=p,type="const")
+
+irf.rw.e=irf(var.2c,impulse="IPMAN",response=c("PSR"))
+
+gamma=-1
+
+irf.rw.e_gamma = irf.rw.e
+
+n=length(irf.rw.e_gamma$irf$IPMAN)
+
+for(i in 1:n){
+    irf.rw.e_gamma$irf$IPMAN[i]   = irf.rw.e_gamma$irf$IPMAN[i]*gamma
+    irf.rw.e_gamma$Lower$IPMAN[i] = irf.rw.e_gamma$Lower$IPMAN[i]*gamma
+    irf.rw.e_gamma$Upper$IPMAN[i] = irf.rw.e_gamma$Upper$IPMAN[i]*gamma
+} 
+
+
+plot(irf.rw.e_gamma)
+
+```
+
+### Conclusion
+\
+The findings from our analysis confirm our suspicions that core economic health indicators (Manufacturing Production) are useful in predicting the Personal Savings rate. What we did not expect to find was that Personal Savings rate did have a statistically significant effect on predicting Manufacturing production, however to a much smaller degree. We also found that individuals respond to shocks in the Manufacturing production in relatively the same manner just inversely. This analysis cannot comment on the mechanism behind these influences, but our intuition and economic theory leads us to believe that positive shocks in Manufacturing production induce individuals to increase consumption and decrease savings. It does not seem that individuals would save more to invest in these companies and increase future earnings. To the contrary, negative shocks to Manufacturing production signal to consumers that potential economic downturn is imminent and that they should save more of their income.\
