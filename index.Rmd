@@ -18,7 +18,8 @@ $~$
 
 ## Abstract
 \
- This analysis will take a look at Personal Savings rate in the United States as well as Industry Production of Manufacturing to see how much each variable helps in predicting the other. The impulse response functions produced in this analysis found that shocks to Manufacturing Production percentage change did induce a response in Personal Savings Rate percentage change and that shocks to Personal Savings Rate percentage change had an impact on the percentage change of Manufacturing Production. The conclusion drawn from this is that when Manufacturing Production spikes, people adjust their savings rate quickly. On the other side of the coin, the percentage change of Manufacturing Production is also affected by the savings habits of the general population. However, the later is a weaker relationship than the former.
+ This analysis will take a look at Personal Savings rate in the United States as well as Industry Production of Manufacturing to see how much each variable helps in predicting the other. The impulse response functions produced in this analysis found that shocks to Manufacturing Production percentage change did induce a response in Personal Savings Rate percentage change and that shocks to Personal Savings Rate percentage change had an impact on the percentage change of Manufacturing Production. The conclusion drawn from this is that when Manufacturing Production spikes, people adjust their savings rate quickly. On the other side of the coin, the percentage change of Manufacturing Production is also affected by the savings habits of the general population. However, the later is a weaker relationship than the former. To see the entire code and html file, follow this link.
+[link](https://will-stevenson813.github.io)
 
 ### Introduction
 \
